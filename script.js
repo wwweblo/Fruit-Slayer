@@ -1,26 +1,30 @@
+// Получаем ссылки на элементы управления
 const startButton = document.getElementById('start-button');
 const backButton = document.getElementById('back-button');
 const mainMenu = document.getElementById('main-menu');
 const gameCanvas = document.getElementById('game-canvas');
 const ctx = gameCanvas.getContext('2d');
 
+// Инициализация переменных игры
 let fruits = [];
 let score = 0;
-let scoreLastSecond = 0;
+let scoreLastThreeSeconds = 0;
 let isGameRunning = false;
 let isMousePressed = false;
 let mouseTrail = [];
 let spawnIntervalId;
-let secondCounterId;
-let scoreLastSecondAlpha = 1; // To control the fading of the score last second text
+let scoreCounterId;
+let scoreLastThreeSecondsAlpha = 1; // Для управления затуханием текста счета за последние три секунды
 const gameSpeed = 1.5;
 const gravity = 0.15;
-const trailDecay = 0.9; // Factor for fading out the trail
-const scoreFadeDuration = 2000; // Duration for fading out the score last second (in milliseconds)
+const trailDecay = 0.9; // Фактор затухания следа мыши
+const scoreFadeDuration = 3000; // Продолжительность затухания счета за последние три секунды (в миллисекундах)
 
+// Установка размеров игрового холста
 gameCanvas.width = window.innerWidth;
 gameCanvas.height = window.innerHeight;
 
+// Класс Fruit для управления объектами фруктов в игре
 class Fruit {
     constructor(x, y, size, speedX, speedY, color, level = 1) {
         this.x = x;
@@ -35,6 +39,7 @@ class Fruit {
         this.level = level;
     }
 
+    // Обновление состояния фрукта
     update() {
         if (this.cut) {
             this.parts.forEach(part => {
@@ -53,6 +58,7 @@ class Fruit {
         }
     }
 
+    // Рисование фрукта на холсте
     draw() {
         if (this.cut) {
             this.parts.forEach(part => {
@@ -73,14 +79,14 @@ class Fruit {
         }
     }
 
+    // Разделение фрукта на части при разрезании
     split(direction) {
-        const angle = Math.random() * Math.PI;
         const part1 = new Fruit(
             this.x,
             this.y,
             this.size / 1.5,
-            direction.x + Math.cos(angle) * 2,
-            -Math.abs(this.speedY) + Math.sin(angle) * 2,
+            direction.x * 4 + Math.random() * 2 - 1, // Увеличена скорость
+            direction.y * 4 + Math.random() * 2 - 1, // Увеличена скорость
             this.getPastelColor(),
             this.level + 1
         );
@@ -88,8 +94,8 @@ class Fruit {
             this.x,
             this.y,
             this.size / 1.5,
-            direction.x - Math.cos(angle) * 2,
-            -Math.abs(this.speedY) - Math.sin(angle) * 2,
+            direction.x * 4 - Math.random() * 2 + 1, // Увеличена скорость
+            direction.y * 4 - Math.random() * 2 + 1, // Увеличена скорость
             this.getPastelColor(),
             this.level + 1
         );
@@ -98,6 +104,7 @@ class Fruit {
         return [part1, part2];
     }
 
+    // Генерация случайного пастельного цвета для части фрукта
     getPastelColor() {
         const hue = Math.random() * 360;
         const saturation = 100;
@@ -106,6 +113,7 @@ class Fruit {
     }
 }
 
+// Функция для создания новых фруктов
 function spawnFruit() {
     const size = Math.random() * 20 + 20;
     const x = Math.random() * (gameCanvas.width - size * 2) + size;
@@ -117,6 +125,7 @@ function spawnFruit() {
     fruits.push(new Fruit(x, y, size, speedX, speedY, color));
 }
 
+// Функция для генерации случайного пастельного цвета
 function getPastelColor() {
     const hue = Math.random() * 360;
     const saturation = 100;
@@ -124,6 +133,7 @@ function getPastelColor() {
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
+// Функция для обработки фруктов (обновление и рисование)
 function handleFruits() {
     fruits.forEach(fruit => {
         fruit.update();
@@ -133,27 +143,30 @@ function handleFruits() {
     fruits = fruits.filter(fruit => !fruit.markedForDeletion);
 }
 
+// Функция для обработки столкновений мыши с фруктами
 function handleCollision() {
     for (let i = 0; i < mouseTrail.length - 1; i++) {
         const start = mouseTrail[i];
         const end = mouseTrail[i + 1];
         const dx = end.x - start.x;
         const dy = end.y - start.y;
+        const magnitude = Math.sqrt(dx * dx + dy * dy);
+        const direction = { x: dx / magnitude, y: dy / magnitude };
 
         fruits.forEach(fruit => {
             const distance = Math.sqrt(Math.pow(start.x - fruit.x, 2) + Math.pow(start.y - fruit.y, 2));
             if (distance < fruit.size && !fruit.cut) {
                 fruit.cut = true;
-                const direction = { x: dx / Math.sqrt(dx * dx + dy * dy), y: dy / Math.sqrt(dx * dx + dy * dy) };
                 const newParts = fruit.split(direction);
                 fruits.push(...newParts);
                 score += fruit.level;
-                scoreLastSecond += fruit.level;
+                scoreLastThreeSeconds += fruit.level;
             }
         });
     }
 }
 
+// Функция для рисования следа мыши
 function drawMouseTrail() {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 5;
@@ -167,7 +180,7 @@ function drawMouseTrail() {
     }
     ctx.stroke();
 
-    // Fade out the mouse trail
+    // Затухание следа мыши
     mouseTrail.forEach(point => {
         point.alpha = (point.alpha || 1) * trailDecay;
         if (point.alpha <= 0.1) {
@@ -193,12 +206,14 @@ function drawMouseTrail() {
     ctx.globalAlpha = 1;
 }
 
-function fadeScoreLastSecond() {
-        ctx.fillStyle = `rgba(255, 255, 255, ${scoreLastSecondAlpha})`;
-        ctx.font = "30px 'Bebas Neue'";
-        ctx.fillText(`+ ${scoreLastSecond}`, 10, 60);
+// Функция для плавного отображения счета за последние три секунды
+function fadeScoreLastThreeSeconds() {
+    ctx.fillStyle = `rgba(255, 255, 255, ${scoreLastThreeSecondsAlpha})`;
+    ctx.font = "30px 'Bebas Neue'";
+    ctx.fillText(`+ ${scoreLastThreeSeconds}`, 10, 60);
 }
 
+// Основная функция анимации игры
 function animate() {
     if (!isGameRunning) return;
     ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
@@ -206,7 +221,7 @@ function animate() {
     drawMouseTrail();
     handleFruits();
     handleCollision();
-    fadeScoreLastSecond();
+    fadeScoreLastThreeSeconds();
 
     ctx.fillStyle = 'white';
     ctx.font = "30px 'Bebas Neue'";
@@ -215,34 +230,40 @@ function animate() {
     requestAnimationFrame(animate);
 }
 
+// Функция для начала игры
 function startGame() {
     mainMenu.style.display = 'none';
     gameCanvas.style.display = 'block';
     backButton.style.display = 'block';
     isGameRunning = true;
     score = 0;
-    scoreLastSecond = 0;
-    scoreLastSecondAlpha = 1;
+    scoreLastThreeSeconds = 0;
+    scoreLastThreeSecondsAlpha = 1;
     fruits = [];
     mouseTrail = [];
     animate();
 
-    spawnIntervalId = setInterval(spawnFruit, 1000);
-    secondCounterId = setInterval(() => {
-        scoreLastSecond = 0;
-    }, 1000);
+    spawnIntervalId = setInterval(spawnFruit, 500); // Увеличена частота появления фруктов
+    scoreCounterId = setInterval(() => {
+        scoreLastThreeSecondsAlpha = 1;
+        setTimeout(() => {
+            scoreLastThreeSecondsAlpha = 0;
+        }, scoreFadeDuration);
+        scoreLastThreeSeconds = 0;
+    }, 3000); // Изменено на 3 секунды
 }
 
+// Функция для остановки игры
 function stopGame() {
     isGameRunning = false;
     clearInterval(spawnIntervalId);
-    clearInterval(secondCounterId);
+    clearInterval(scoreCounterId);
     mainMenu.style.display = 'flex';
     gameCanvas.style.display = 'none';
     backButton.style.display = 'none';
 }
 
-// Event listeners for mouse events
+// Обработчики событий для мыши
 gameCanvas.addEventListener('mousedown', (e) => {
     isMousePressed = true;
     handleStart(e);
@@ -259,7 +280,7 @@ gameCanvas.addEventListener('mousemove', (e) => {
     }
 });
 
-// Event listeners for touch events
+// Обработчики событий для сенсорных устройств
 gameCanvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     isMousePressed = true;
@@ -278,6 +299,7 @@ gameCanvas.addEventListener('touchmove', (e) => {
     }
 });
 
+// Обработчик начала ввода (мышь или сенсорный экран)
 function handleStart(event) {
     const rect = gameCanvas.getBoundingClientRect();
     const x = event.clientX || event.touches[0].clientX;
@@ -285,14 +307,17 @@ function handleStart(event) {
     mouseTrail = [{ x: x - rect.left, y: y - rect.top }];
 }
 
+// Обработчик движения ввода (мышь или сенсорный экран)
 function handleMove(event) {
     const rect = gameCanvas.getBoundingClientRect();
     const x = event.clientX || event.touches[0].clientX;
     const y = event.clientY || event.touches[0].clientY;
     mouseTrail.push({ x: x - rect.left, y: y - rect.top });
     if (mouseTrail.length > 10) mouseTrail.shift();
-    handleCollision(); // Check for collision during mouse/touch move
+    handleCollision(); // Проверка столкновений при движении мыши/сенсора
 }
 
+// Назначение обработчиков событий кнопкам
 startButton.addEventListener('click', startGame);
 backButton.addEventListener('click', stopGame);
+ВА
